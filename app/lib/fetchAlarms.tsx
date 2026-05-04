@@ -9,6 +9,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import ini from "ini";
+import sql from '@/app/sql/db';
 
 function loadAwsProfiles() {
   const credentialsPath = path.join(os.homedir(), ".aws", "credentials");
@@ -49,29 +50,36 @@ export default async function getCloudWatchAlarms() {
   const results = await Promise.allSettled(
     profiles.map(profile => getMetricAlarmsForProfile(profile))
   );
-
-  return results.flatMap(r => r.value);
+  syncAlarmsWithCloudwatch(results.flatMap(r => r.value));
+  return await results.flatMap(r => r.value);
 }
 
-async function checkAgainstDB(alarms) {
-  try {
-    const rows = alarms
-        .filter((alarm) => alarm.AlarmName != null)
-        .map((alarm) => ({
-        name: String(alarm.AlarmName),
-        display_status: true as boolean
-      }));
-    i = 0;
-    for (const row of rows) {
-      await sql`
-        SELECT name, display_Status FROM alarms
-      `;
-      i++;
-    }
-  } catch (error) {
-    console.error("Failed", error);
-    process.exit(1);
-  } finally {
-    await sql.end();
+async function syncAlarmsWithCloudwatch(alarms) {
+  const checks = await sql<{ name: string, display_Status: boolean}[]>`
+    SELECT name, display_Status FROM alarms
+  `;
+  const previousVisibility: Record<string, boolean> = {};
+  for (const check of checks) {
+    previousVisibility[check.name] = check.display_Status;
   }
+  await sql `TRUNCATE TABLE alarms`;
+  const rows = alarms
+    .filter((alarm) => alarm.AlarmName != null)
+    .map((alarm) => {
+      const name = String(alarm.AlarmName);
+
+      const visibility =
+        previousVisibility[name] !== undefined
+        ? previousVisibility[name]
+        : true;
+      return {name, display_status: visibility,};
+    });
+  for (const row of rows) {
+    await sql`
+      INSERT INTO alarms (name, display_status)
+      VALUES (${row.name}, ${row.display_status})
+    `;
+  }
+  return rows;
+
 }

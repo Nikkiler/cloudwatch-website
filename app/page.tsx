@@ -1,13 +1,28 @@
 import Link from "next/link";
 import getCloudWatchAlarms from './lib/fetchAlarms';
-import AlarmGrid from "./components/AlarmGrid";
+import ClientAlarmGrid from "./components/ClientAlarmGrid";
 import sql from "./sql/db";
-
+import type { MetricAlarm } from "@aws-sdk/client-cloudwatch";
 export default async function Home() {
   const alarms = await getCloudWatchAlarms();
-  const test = await sql`SELECT * FROM alarms`;
-  console.log(test);
+  const visibilityRows = await sql<{ name: String; display_status: boolean }[]>`
+    SELECT name, display_Status FROM alarms
+  `;
+  const visibilityByName: Record<string, boolean> = {};
+  for (const row of visibilityRows) {
+    visibilityByName[row.name] = row.display_status;
+  }
+  const visibleAlarms = alarms.filter((alarm) => {
+    const name = alarm.AlarmName;
 
+    if (!name) {
+      const name = "Name not found";
+      return true;
+    }
+
+    const visibility = visibilityByName[name];
+    return visibility !== false;
+  });
   return (
     <main className="min-h-screen bg-panel p-8">
       <div className="max-w-7xl mx-auto">
@@ -22,7 +37,7 @@ export default async function Home() {
           Settings
           </Link>
         </header>
-        <AlarmGrid alarms={alarms} />
+        <ClientAlarmGrid alarms={visibleAlarms} />
       </div>
     </main>
   );

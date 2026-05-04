@@ -1,7 +1,7 @@
 import type { MetricAlarm } from "@aws-sdk/client-cloudwatch";
 import AlarmCard from "./AlarmCard";
 
-export default function AlarmGrid({
+export default function ClientAlarmGrid({
   alarms,
   isAdmin = false,
 }: {

@@ -5,13 +5,15 @@ import type { MetricAlarm } from "@aws-sdk/client-cloudwatch";
 export default function AlarmCard({
   alarm,
   isAdmin = false,
+  visible,
+  onToggleVisible,
 }: {
   alarm: MetricAlarm;
   isAdmin?: boolean;
+  visible?: boolean;
+  onToggleVisible?: () => void;
 }) {
   const Alarmstate = alarm.StateValue ?? "INSUFFICIENT_DATA";
-  const [visible, setVisible] = useState(true);
-  const state = alarm.StateValue ?? "INSUFFICIENT_DATA";
   const stateBorderMap: Record<string, string> = {
     OK: "border-ok",
     ALARM: "border-alarm",
@@ -27,7 +29,7 @@ export default function AlarmCard({
   return (
     <div
       className={`rounded-xl border ${
-        stateBorderMap[state]
+        stateBorderMap[Alarmstate]
       } bg-panel p-5 shadow-panel flex flex-col`}
     >
       <h3 className="text-sm font-semibold text-white mb-2 break-words">
@@ -46,12 +48,12 @@ export default function AlarmCard({
           >
             {Alarmstate}
           </span>
-          {isAdmin && (
+          {isAdmin && typeof visible == "boolean" && (
             <button
               type="button"
               role="switch"
               aria-checked={visible}
-              onClick={() => setVisible((prev) => !prev)}
+              onClick={onToggleVisible}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${
                 visible ? "bg-ok" : "bg-slate-600"
               }`}
