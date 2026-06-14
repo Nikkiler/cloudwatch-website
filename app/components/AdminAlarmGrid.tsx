@@ -5,9 +5,11 @@ import AlarmCard from "./AlarmCard";
 export default function AdminAlarmGrid({
   initialAlarms,
   isAdmin = true,
+  onToggleVisible,
 }: {
   initialAlarms: {alarm: MetricAlarm, display_status: boolean}[];
   isAdmin?: boolean;
+  onToggleVisible?: (alarmName: String) => void;
 }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -20,7 +22,11 @@ export default function AdminAlarmGrid({
           alarm={entry.alarm}
           isAdmin={isAdmin}
           visible={entry.display_status}
-          onToggleVisible={() => handleToggleVisibility(entry.alarm.AlarmName as string)}
+          onToggleVisible={
+            onToggleVisible 
+              ? () => onToggleVisible(alarm.AlarmName as string) 
+              : undefined
+          }
         />
         );
       })}
