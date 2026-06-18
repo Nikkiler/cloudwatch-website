@@ -12,18 +12,21 @@ import ini from "ini";
 import sql from '@/app/sql/db';
 
 function loadAwsProfiles() {
+  //AWS CLI and SDK store named profiles in the credentials files in their home directory
   const credentialsPath = path.join(os.homedir(), ".aws", "credentials");
-
+  //if the file doesn't exist theres nothing to load
   if (!fs.existsSync  (credentialsPath)) {
     return [];
   }
-
+  //Each top level sectionr represents an AWS profile, so use INI.
   const parsed = ini.parse(fs.readFileSync(credentialsPath, "utf-8"));
   return Object.keys(parsed);
 }
 async function getMetricAlarmsForProfile(profile) {
   const client = new CloudWatchClient({
+    //use the selected AWS profile
     credentials: fromIni({ profile }),
+    //Default to ap-southeast-2 if the local environment file doesn't have a preset
     region: process.env.AWS_REGION ?? "ap-southeast-2",
   });
 
@@ -32,6 +35,7 @@ async function getMetricAlarmsForProfile(profile) {
 
   do {
     const response = await client.send(
+      //Cloudwatch paginates DescribeAlarms results, so keep requesting pages until AWS stops returning a NextToken
       new DescribeAlarmsCommand({ NextToken })
     );
 
@@ -70,13 +74,15 @@ export default async function getCloudWatchAlarms() {
 }
 
 async function syncAlarmsWithCloudwatch(alarms: MetricAlarm[]) {
+  //Only sync alarms that have a nname, since name is the unique identifier
   const rows = alarms
     .filter((alarm) => alarm.AlarmName != null)
     .map((alarm) => ({
       name: String(alarm.AlarmName),
       display_status: true,
+      //New alarms are visible by default, if a row already exists just keep current settings
     }));
-
+    //SQL query for each alarm into the db.
   for (const row of rows) {
     await sql`
       INSERT INTO alarms (name, display_status)
@@ -85,6 +91,6 @@ async function syncAlarmsWithCloudwatch(alarms: MetricAlarm[]) {
       DO NOTHING
     `;
   }
-
+  //return our new rows array.
   return rows;
 }
