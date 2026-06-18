@@ -8,8 +8,6 @@ export default async function Home() {
   const visibilityRows = await sql<{ name: String; display_status: boolean }[]>`
     SELECT name, display_Status FROM alarms
   `;
-
-  console.log('alarms from AWS:', alarms);
   const visibilityByName: Record<string, boolean> = {};
   for (const row of visibilityRows) {
     visibilityByName[row.name] = row.display_status;
