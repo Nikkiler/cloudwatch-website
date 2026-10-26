@@ -1,36 +1,135 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CloudWatch Alarm Dashboard
 
-## Getting Started
+A single-pane dashboard for Amazon CloudWatch alarms across **multiple AWS accounts**. It reads every profile in your local AWS credentials file, pulls their alarms, and displays them as a color-coded grid — with an admin page to hide the alarms you don't care about.
 
-First, run the development server:
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+![React](https://img.shields.io/badge/React-19-61dafb)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-required-336791)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Features
+
+- **Multi-account** — automatically discovers every named profile in `~/.aws/credentials` and fetches alarms from each in parallel
+- **At-a-glance status** — cards are color-coded by alarm state: `OK`, `ALARM`, `INSUFFICIENT_DATA`
+- **Hide the noise** — an admin page with per-alarm visibility toggles; hidden alarms disappear from the main dashboard
+- **Persistent settings** — visibility preferences are stored in Postgres and survive restarts
+- **Auto-sync** — new alarms that appear in CloudWatch are added to the database automatically (visible by default)
+- **Full pagination** — handles accounts with more alarms than a single `DescribeAlarms` page returns
+
+## How it works
+
+```
+~/.aws/credentials ──► fetchAlarms ──► CloudWatch DescribeAlarms (per profile)
+                                              │
+                                              ▼
+                          Postgres `alarms` table ◄── sync new alarm names
+                                              │
+                      ┌───────────────────────┴────────────────────┐
+                      ▼                                            ▼
+              /  (dashboard)                          /settingsPage (admin)
+       shows alarms where visible = true        toggle visibility → POST /api/alarms/save
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Prerequisites
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Node.js 20+ and [pnpm](https://pnpm.io)
+- A PostgreSQL database
+- AWS credentials configured in `~/.aws/credentials` with at least one profile that has `cloudwatch:DescribeAlarms` permission
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Installation
 
-## Learn More
+```bash
+git clone https://github.com/Nikkiler/cloudwatch-website.git
+cd cloudwatch-website
+pnpm install
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 1. Create the database table
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Run the schema against your Postgres database (same values you put in `.env.local` below):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+psql -h localhost -U postgres -d cloudwatch -f app/sql/schema.sql
+```
 
-## Deploy on Vercel
+### 2. Configure environment variables
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Create a `.env.local` file in the project root:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```ini
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=cloudwatch
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=yourpassword
+
+# Optional — defaults to ap-southeast-2
+AWS_REGION=us-east-1
+```
+
+### 3. Run it
+
+```bash
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## Usage
+
+| Route | What it does |
+|-------|--------------|
+| `/` | Main dashboard. Shows all alarms that haven't been hidden. |
+| `/settingsPage` | Admin view. Every alarm is listed with a toggle switch; flip the ones you want to hide and click **Save**. |
+| `POST /api/alarms/save` | API endpoint the admin page calls. Accepts `[{ name, display_status }]` and upserts each row. |
+
+### AWS profile setup
+
+The app reads **every** profile in `~/.aws/credentials`:
+
+```ini
+[production]
+aws_access_key_id = ...
+aws_secret_access_key = ...
+
+[staging]
+aws_access_key_id = ...
+aws_secret_access_key = ...
+```
+
+Both accounts' alarms appear on the same dashboard. A profile that fails to authenticate is logged and skipped — it won't bring down the page.
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POSTGRES_HOST` | — | Database host |
+| `POSTGRES_PORT` | — | Database port |
+| `POSTGRES_DATABASE` | — | Database name |
+| `POSTGRES_USER` | — | Database user |
+| `POSTGRES_PASSWORD` | — | Database password |
+| `AWS_REGION` | `ap-southeast-2` | Region to query for alarms (applies to all profiles) |
+
+## Project structure
+
+```
+app/
+├── page.tsx                  # Main dashboard (server component)
+├── settingsPage/             # Admin visibility page
+├── api/alarms/save/route.ts  # Upsert endpoint for visibility settings
+├── components/               # AlarmCard, grids, buttons
+├── lib/fetchAlarms.tsx       # AWS profile discovery + CloudWatch fetching + DB sync
+└── sql/
+    ├── db.tsx                # Postgres client
+    └── schema.sql            # Table definition
+scripts/seed.ts               # One-off script to seed the alarms table
+```
+
+## Tech stack
+
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS · PostgreSQL via [`postgres`](https://github.com/porsager/postgres) · AWS SDK v3
+
+
+## Credits
+
+The app itself was designed and written by hand. After it was finished, a small cleanup pass (four bug fixes and this README) was done with help from Claude, an AI assistant. Those commits are marked `Co-Authored-By: Claude` in the history.
