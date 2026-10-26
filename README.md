@@ -39,7 +39,7 @@ A single-pane dashboard for Amazon CloudWatch alarms across **multiple AWS accou
 ## Installation
 
 ```bash
-git clone https://github.com/Nikkiler/cloudwatch-website.git
+git clone https://github.com/alanferious/cloudwatch-website.git
 cd cloudwatch-website
 pnpm install
 ```
