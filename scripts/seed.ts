@@ -21,6 +21,8 @@ async function seedAlarms() {
 			await sql`
 				INSERT INTO alarms (name, display_status)
 				VALUES (${row.name}, ${row.display_status})
+				ON CONFLICT (name)
+				DO NOTHING
 			`;
 		}
 	} catch (error) {
